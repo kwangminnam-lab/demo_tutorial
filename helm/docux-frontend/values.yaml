@@ -1,0 +1,44 @@
+# DocuX 프론트엔드 Helm values.
+# nginx가 /v1·/healthz 를 backendUrl 로 프록시 → 동일 오리진, CORS 불요.
+
+image:
+  repository: gitea.try.mrxrunway.ai/platform/demo/docux-frontend
+  tag: "2.9"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+replicas: 1
+
+# 백엔드 서비스 DNS. 같은 namespace면 단축명으로 충분.
+backendUrl: http://docux-api:8000
+
+resources:
+  requests:
+    cpu: "50m"
+    memory: 64Mi
+  limits:
+    cpu: "200m"
+    memory: 128Mi
+
+service:
+  type: ClusterIP
+  port: 8080
+
+# ── 외부 노출 (Gateway API HTTPRoute) — 사내 공유 Gateway(istio)에 연결 ──
+#    parentRefs는 필수: 비우면 어느 Gateway에도 안 붙어 트래픽 0(404).
+httpRoute:
+  enabled: true
+  hostname: "demo-ui.try.mrxrunway.ai"   # ← 원하는 프론트 호스트
+  hostnames: []
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: platform-core-gateway
+      namespace: istio-system
+      sectionName: http
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: platform-core-gateway
+      namespace: istio-system
+      sectionName: https

@@ -1,0 +1,15 @@
+# 선택적 OCR 의존 — 스캔/이미지 필드추출 grounding(PaddleLineProvider, 클러스터 Linux 전용).
+#
+# base 의존(pyproject/uv.lock, requirements.txt)에 넣지 않는다: paddlepaddle 은 무겁고
+# ARM Mac 휠이 불안정해 로컬 dev(.venv)를 깨뜨린다. 이 파일은 **클러스터 이미지 빌드에서만**
+# 설치한다 — Dockerfile `--build-arg WITH_OCR=1`. 미설치 환경에선 PaddleLineProvider.
+# is_available()=False 로 registry 가 건너뛴다(조용한 실패 아님 — 다음 tier 로).
+#
+# 주의: 아래 핀은 Linux x86_64 CPU 기준 보수값 — 클러스터 빌드 성공 후 정확 버전으로 고정 권장.
+paddlepaddle>=2.6,<3
+paddleocr>=2.7,<3
+
+# 파싱 OCR(스캔 PDF·이미지) 한국어 — docling OCR 엔진. macOS 로컬은 ocrmac(Apple Vision)을
+# 쓰지만 Linux 클러스터엔 없으므로 easyocr(ko)를 설치한다. settings.parse_ocr_engine=auto 가
+# ocrmac 부재를 감지해 easyocr 를 자동 선택한다(한글 모델 런타임 1회 다운로드).
+easyocr>=1.7

@@ -1,0 +1,9 @@
+{
+  "phases": [
+    {
+      "dir": "6-codeserver-pipeline",
+      "status": "completed",
+      "completed_at": "2026-06-22T14:04:05+0900"
+    }
+  ]
+}

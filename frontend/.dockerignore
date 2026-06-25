@@ -1,0 +1,12 @@
+# 프론트엔드 이미지 빌드 컨텍스트 제외 — 설치·빌드 산출물은 이미지 안에서 생성.
+node_modules/
+dist/
+.vite/
+coverage/
+
+# 테스트·로컬·VCS 잡파일.
+*.log
+.DS_Store
+.git/
+.idea/
+.vscode/

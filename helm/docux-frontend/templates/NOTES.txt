@@ -1,0 +1,6 @@
+docux-frontend 배포 완료 (namespace: {{ .Release.Namespace }}).
+
+내부 서비스: docux-frontend:{{ .Values.service.port }}
+백엔드 프록시 대상: {{ .Values.backendUrl }}
+
+외부 접속은 플랫폼의 ingress/route로 docux-frontend:{{ .Values.service.port }} 를 노출하면 된다.

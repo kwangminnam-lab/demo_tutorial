@@ -1,0 +1,101 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.python-version
+
+# --- 환경·시크릿 ---
+.env
+.env.*
+!.env.example
+credentials*
+*.pem
+*.key
+secrets.yaml
+secrets.json
+*.html
+
+# --- 모델 가중치 (큰 바이너리 — Git 금지, 로컬/PVC에만) ---
+local_models/
+local_model/
+*.safetensors
+*.gguf
+*.bin
+
+# --- 빌드 산출물 ---
+dist/
+build/
+target/
+out/
+*.so
+*.o
+*.a
+*.dll
+*.dylib
+*.class
+*.jar
+*.exe
+
+# --- 의존성 (Node 등) ---
+node_modules/
+.pnp.*
+.yarn/
+
+# --- 로그 / 임시 ---
+*.log
+*.tmp
+tmp/
+
+# --- IDE / OS ---
+.vscode/
+.idea/
+.DS_Store
+
+# --- 빌드 / 캐시 ---
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage/
+
+# --- phase 실행 출력 ---
+phases/**/phase*-output.json
+phases/**/step*-output.json
+phases/**/step*.result.json
+
+# --- 로컬 런타임/스크래치 (E2E·API 검증용, 커밋 안 함) ---
+_api_chroma/
+_api*.db
+_e2e*.db
+_api_ingest*.py
+_e2e*.py
+_update_*.py
+
+#--- 데이터 커밋 방지 ---
+data/
+.gstack/
+docs
+design
+charts
+deploy
+helm-repo
+@*~
+Dockerfile
+docker-compose.yml
+docker-compose.*.yml
+Dockerfile.*
+record.md
+docux-0.1.0.tar.gz
+Makefile
+samlple_data/
+demo_data/
+record.md
+record2.md
+connectivity_tests/
+# 개인 작업 노트 — 로컬 .env 키 등 시크릿 포함. 공개 푸쉬 제외.
+record.md
+record2.md
+record*.md

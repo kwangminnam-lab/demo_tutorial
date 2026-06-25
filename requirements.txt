@@ -1,0 +1,62 @@
+# DocuX 소스 코드 직접 의존성 (코드의 import 문이 직접 요구하는 외부 라이브러리)
+# 정확한 버전·전이 의존은 uv.lock 참고. 설치: pip install -r requirements.txt
+
+# ── 코어 (항상 필수) ─────────────────────────────────────
+pydantic>=2
+pydantic-settings>=2
+fastapi
+uvicorn
+httpx
+python-multipart
+pyyaml
+# LLM 관측 — Langfuse 추적(설정 시에만 동작, 미설정/미설치면 no-op).
+langfuse>=2,<3
+# AI OCR(Qwen3-VL) 성능 추적 — MLflow 추적 클라이언트만(skinny, 서버/UI 의존 제외).
+# 설정(MLFLOW_TRACKING_URI) 시에만 동작, 미설정/미설치면 no-op.
+mlflow-skinny>=2,<3
+
+# ── DB / 저장소 ──────────────────────────────────────────
+sqlalchemy>=2
+alembic
+# PostgreSQL 드라이버 (DATABASE_URL=postgresql+psycopg://...).
+# binary 변종으로 시스템 libpq 의존 없이 설치.
+psycopg[binary]>=3.1
+neo4j
+# 인증: 비밀번호 해싱(bcrypt) + 서명 세션 토큰(JWT) — ADR-017.
+bcrypt
+pyjwt
+
+# ── 문서 추출 / 파싱 ────────────────────────────────────
+pymupdf
+pymupdf4llm
+python-docx
+python-pptx
+openpyxl
+fpdf2
+langchain-text-splitters
+docling
+# 페이지 프리뷰 폰트/테마 XML 패치(_page_render) — `from lxml import etree` 직접 import.
+# (python-docx의 전이 의존이기도 하나 직접 쓰므로 명시.)
+lxml>=5
+
+# ── MCP 서버 (카탈로그 챗봇 연결) ─────────────────────
+mcp>=1.0
+
+# ── 실 backend (.env 기본값이 요구 — 운영/도커 풀스택) ──
+# embedder_backend=sentence_transformers (의미 임베딩, MiniLM-L12 dim384).
+sentence-transformers>=2
+
+# ── 개발 (lint / type / test) ──────────────────────────
+ruff
+mypy
+pytest
+# pandas: 추출기 테스트(test_extractors)에서만 사용 — 런타임 코어 의존 아님.
+pandas
+
+# ── 선택(lazy import) — 해당 기능 사용 시만 설치 ───────
+# 외부 LLM provider (X-LLM-Provider 헤더로 선택, 미설치 시 graceful 에러):
+# anthropic               # provider=claude
+# google-generativeai     # provider=gemini
+# PDF 레이아웃 추출 폴백 (pdf_layout, 미설치 시 다른 추출기로 폴백):
+# openparse
+google-genai>=1,<3

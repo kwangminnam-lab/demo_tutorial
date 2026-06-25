@@ -1,0 +1,11 @@
+# 비민감 설정 — values.config를 그대로 ConfigMap으로 렌더(backend 토글·서비스 주소).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: docux-config
+  labels:
+    app: docux
+data:
+  {{- range $k, $v := .Values.config }}
+  {{ $k }}: {{ $v | quote }}
+  {{- end }}

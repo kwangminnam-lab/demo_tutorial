@@ -1,0 +1,156 @@
+# DocuX 백엔드 API Helm values.
+# 서비스명 docux-api(:8000) 고정 — 프론트 nginx가 이 DNS로 프록시(BACKEND_URL).
+
+image:
+  # 사내 레지스트리 전체 경로. (gitea 레지스트리 예시)
+  repository: gitea.try.mrxrunway.ai/platform/demo/docux-api
+  tag: "2.18"
+  pullPolicy: IfNotPresent
+
+# 레지스트리 인증 필요시 pull secret 이름(미리 생성).
+imagePullSecrets: []
+
+replicas: 1
+
+# ── 헬스 probe (조정 가능) ──
+# /healthz가 백엔드 전부 ping해 느림 → timeout 넉넉히. LLM 게이트웨이 ping이 느릴 때
+# 대비해 timeoutSeconds·failureThreshold를 크게. 그래도 안 뜨면 더 늘려라.
+probes:
+  readiness:
+    initialDelaySeconds: 40
+    periodSeconds: 15
+    timeoutSeconds: 15
+    failureThreshold: 8
+  liveness:
+    initialDelaySeconds: 90
+    periodSeconds: 30
+    timeoutSeconds: 15
+    failureThreshold: 8
+
+resources:
+  requests:
+    cpu: "500m"
+    memory: 1.5Gi
+  limits:
+    cpu: "2"
+    # in-process 임베딩 + docling 추출 + easyocr(한글) 동시 로드 → OOM(502) 방지.
+    # 12Gi 에선 파싱 요청 시 임베딩+docling+easyocr 코로드로 OOMKilled→재시작 루프(가중치
+    # 재로드 반복) 관측 → 16Gi 로 상향. 노드 여유 없으면 14Gi 로. (OOM 관측 시 더 ↑.)
+    memory: 16Gi
+
+# ── GPU 임베딩 (선택) ──
+# enabled:true면 파드가 nvidia.com/gpu 1장을 요청하고, 보통 EMBEDDING_DEVICE=cuda와
+# **CUDA torch로 빌드한 이미지**(Dockerfile --build-arg TORCH_INDEX_URL=.../cu121)가
+# 함께 필요하다. GPU 없으면 코드가 cpu로 graceful 폴백한다(같은 이미지 양쪽 동작).
+# GPU 노드 스케줄이 필요하면 nodeSelector/tolerations로 지정한다.
+gpu:
+  enabled: false
+  count: 1
+nodeSelector: {}
+tolerations: []
+
+# ── 비민감 설정 → ConfigMap docux-config (envFrom). 사내 K8s 토폴로지 고정값 ──
+#    FILL_ME__ 는 사내 service DNS·모델명으로 교체.
+config:
+  # 임베딩 in-process — 모델을 이미지에 구워(Dockerfile) docux-api가 자체 로드.
+  # 별도 임베딩 서버(TEI/Triton)·EMBED_BASE_URL 불필요. 토큰한도·배치는 내부 처리.
+  EMBEDDER_BACKEND: sentence_transformers
+  # 코드 기본값·로컬과 동일(1024차원). 이미지에 굽는 EMBED_MODEL(Dockerfile)과 일치해야 함.
+  EMBEDDING_MODEL_NAME: Qwen/Qwen3-Embedding-0.6B
+  # 임베딩 디바이스 — 비우면 cuda→mps→cpu 자동. GPU 노드 + CUDA torch면 "cuda" 명시.
+  EMBEDDING_DEVICE: ""
+  LLM_BACKEND: openai_compat
+  VECTOR_BACKEND: postgres
+  SEARCH_BACKEND: postgres
+  GRAPH_BACKEND: neo4j
+  RERANKER_ENABLED: "false"
+  NEO4J_URI: bolt://neo4j-db.001-doxdemo.svc.cluster.local:7687
+  NEO4J_USER: neo4j
+  LLM_BASE_URL: https://llm.try.mrxrunway.ai/openai/deployments/openai%2Fgpt-oss-120b
+  LLM_MODEL_NAME: openai/gpt-oss-120b
+  # ── 듀얼 LLM: provider=qwen3 (사내 vLLM 서빙). BASE_URL 비어있으면 qwen3 미구성(off).
+  #    qwen3-serving 배포 후 in-cluster svc URL 로 채운다(경로 B, 게이트웨이 우회):
+  #      http://qwen3-4b-instruct.001-doxdemo.svc.cluster.local:8000/v1
+  #    ⚠️ vLLM 서빙 뜨기 전에 채우면 qwen3 선택 시 connection-refused — 서빙 후 채울 것.
+  LLM_QWEN3_BASE_URL: ""
+  LLM_QWEN3_MODEL: Qwen3-4B-Instruct-2507     # vLLM --served-model-name 과 일치
+  LLM_QWEN3_MAX_TOKENS: "4000"
+  # gpt-oss는 추론(reasoning) 모델 — 기본 1536은 추론에 다 소진돼 답(content)이 빔.
+  # reasoning + 답이 함께 들어가게 크게. (게이트웨이가 reasoning_effort는 미지원.)
+  LLM_MAX_TOKENS: "16000"
+  # 프론트가 nginx 프록시로 동일 오리진 호출 → CORS 불요(비우면 됨).
+  CORS_ALLOW_ORIGINS: ""
+  # Langfuse LLM 관측(추적) — DocuX×Runway LLMOps 데모. SDK는 이미지에 포함.
+  # 키(아래 secret) 채우고 "true"로 바꾸면 동작(기본 off=NoopTracer, 답변 영향 없음).
+  LANGFUSE_ENABLED: "false"
+  LANGFUSE_BASE_URL: ""        # 예: https://langfuse.try.mrxrunway.ai
+  # 파싱 OCR(스캔 PDF·이미지) 한국어 엔진. docling 기본 RapidOCR은 중국어 모델이라 한글이
+  # 한자로 깨진다. 이미지는 WITH_OCR=1 로 빌드해 easyocr(ko)를 포함한다(requirements-ocr).
+  # auto면 Linux에서 ocrmac 부재를 감지해 easyocr 를 자동 선택한다(명시하려면 "easyocr").
+  DOCUX_PARSE_OCR_ENGINE: "auto"
+  DOCUX_PARSE_OCR_LANG: "ko,en"
+  # ── AI OCR 손글씨/스캔 VLM (사내 Qwen3-VL vLLM, 외부 전송 0) ──
+  # 폐쇄망서 Gemini가 막혀 사내 Qwen3-VL로 대체. 비우면 VLM 비활성(디지털만 동작,
+  # 손글씨 요청은 명확한 에러). qwen3-vl 서빙 배포 후 in-cluster svc URL(`/v1` 포함):
+  VLM_BASE_URL: "http://qwen3-vl-4b.001-doxdemo.svc.cluster.local:8000/v1"
+  VLM_MODEL: "Qwen3-VL-4B-Instruct"   # vLLM --served-model-name 과 일치
+  # 산출물 경로(step0): DOCUX_DATA_ROOT=적재 데이터 루트, DOCUX_EXPORT_ROOT=내보내기 루트.
+  # 둘 다 미설정 → 코드 기본값(data, data/export)으로 동작(무회귀). 값이 필요하면 여기 키를
+  # 추가한다(빈 문자열로 두면 빈 경로로 덮어쓰니 금지). DOCUX_EXPORT_ROOT는 export.enabled=true면
+  # deployment가 export.mountPath로 직접 주입하므로 config엔 넣지 않는다(중복 주입 금지).
+
+# ── 민감값은 git 금지 — 미리 만든 Secret 참조(envFrom secretRef) ──
+#   LLM_API_KEY = LLM 게이트웨이 키. (임베딩은 in-process라 EMBED_API_KEY 불요 — 제거됨.)
+#   kubectl -n <ns> create secret generic docux-secret \
+#     --from-literal=DATABASE_URL='postgresql+psycopg://user:pw@postgresql-db.001-doxdemo.svc.cluster.local:5432/db' \
+#     --from-literal=NEO4J_PASSWORD='...' \
+#     --from-literal=JWT_SECRET='...' \
+#     --from-literal=GEMINI_API_KEY='...' \
+#     --from-literal=LLM_API_KEY='sk-...'
+secret:
+  # envFrom이 읽을 K8s Secret 이름. create=true면 차트가 이 이름으로 생성한다.
+  existingSecret: docux-secret
+  # true면 차트가 아래 data로 Secret을 만든다 — OpenBao·kubectl 불요.
+  # 실값은 **배포 화면 values 칸에만** 입력한다. 패키지(.tgz)·git엔 빈 값으로 둔다
+  # (시크릿 유출 방지). 이미 외부에서 만든 Secret을 쓰려면 create: false.
+  create: true
+  data:
+    DATABASE_URL: ""
+    NEO4J_PASSWORD: ""
+    JWT_SECRET: ""
+    GEMINI_API_KEY: ""
+    LLM_API_KEY: ""
+    # Langfuse 키(LANGFUSE_ENABLED=true 일 때만 필요). 배포 화면 values 칸에만 입력.
+    LANGFUSE_PUBLIC_KEY: ""
+    LANGFUSE_SECRET_KEY: ""
+    # qwen3 vLLM 인증키 — 자체 서빙은 보통 인증 안 검(빈값). 게이트웨이 경유면 키 입력.
+    LLM_QWEN3_API_KEY: ""
+
+# ── DB 마이그레이션 ──
+# pre-install/upgrade Helm 훅 Job. DB 못 닿으면 이 훅이 install/uninstall을 막아
+# 배포·해체가 멈출 수 있어 기본 끔. serve_api가 기동 시 create_all로 테이블을
+# 만드므로 앱은 정상 기동한다(운영 스키마 권위는 alembic — 필요 시 따로 돌린다).
+migrate:
+  enabled: false
+
+# ── 산출물(.jsonl) 내보내기 공유 볼륨 — code-server workspace PVC 공유(RWX) ──
+# code-server가 같은 PVC를 ~/workspace 에 마운트하면 docux 산출물(parse/extract .jsonl)이
+# IDE 노드 폴더에 즉시 보인다. 코드는 step0/step5에서 경로(DOCUX_EXPORT_ROOT)·쓰기 완료 —
+# 여기는 헬름 배선만. enabled=false면 코드 기본값(export_root=data/export)으로 동작(무회귀).
+# ⚠️ RWX 전제: storageClassName(local-path-shared)이 ReadWriteMany를 지원하고 code-server와
+#    동일 노드/스토리지클래스여야 공유된다. RWX 미지원 환경에서 enabled=true면 마운트 실패.
+export:
+  enabled: false                 # true면 PVC를 마운트하고 DOCUX_EXPORT_ROOT 주입.
+  existingClaim: ""              # 기존 code-server PVC 이름(권장). 비우고 create=true면 차트가 생성.
+  create: false                  # true면 아래 스펙으로 RWX PVC 생성(보통 code-server가 이미 소유 → false).
+  storageClassName: local-path-shared
+  size: 10Gi
+  mountPath: /home/coder/workspace/docux-export   # 컨테이너 내 마운트 경로 = DOCUX_EXPORT_ROOT
+
+# ── 외부 노출(Gateway API HTTPRoute) — 기본 끔. 프론트 nginx가 /v1을 내부 프록시하므로
+#    API는 보통 외부 노출 불요. 직접 호출 필요할 때만 enabled: true + hostname 지정.
+httpRoute:
+  enabled: false
+  hostname: ""
+  hostnames: []
+  parentRefs: []

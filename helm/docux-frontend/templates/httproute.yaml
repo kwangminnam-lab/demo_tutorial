@@ -1,0 +1,26 @@
+{{- if .Values.httpRoute.enabled }}
+# Gateway API HTTPRoute — 프론트를 외부 hostname으로 노출(플랫폼 공유 Gateway에 연결).
+# 플랫폼이 parentRefs(Gateway)를 자동 주입하면 parentRefs는 비워둔다.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: docux-frontend
+  labels:
+    app: docux-frontend
+spec:
+  {{- with .Values.httpRoute.parentRefs }}
+  parentRefs:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  hostnames:
+    {{- if .Values.httpRoute.hostname }}
+    - {{ .Values.httpRoute.hostname | quote }}
+    {{- end }}
+    {{- range .Values.httpRoute.hostnames }}
+    - {{ . | quote }}
+    {{- end }}
+  rules:
+    - backendRefs:
+        - name: docux-frontend
+          port: {{ .Values.service.port }}
+{{- end }}

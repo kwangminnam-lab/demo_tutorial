@@ -1,0 +1,6 @@
+apiVersion: v2
+name: docux
+description: DocuX 통합(단일 이미지) — 백엔드(FastAPI) + 프론트(SPA)를 한 컨테이너로. uvicorn이 UI(/)·API(/v1)를 같은 포트(8000)에서 서빙(nginx 불요). 외부 PG·Neo4j·LLM 게이트웨이·사내 Qwen3-VL 연결.
+type: application
+version: 0.1.2
+appVersion: "1.0"

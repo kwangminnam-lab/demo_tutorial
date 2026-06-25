@@ -1,0 +1,20 @@
+{{- if and .Values.export.enabled .Values.export.create }}
+# 산출물 공유 PVC(RWX) — export.create=true일 때만 생성.
+# 보통 code-server가 PVC를 이미 소유하므로 existingClaim으로 공유한다(create=false).
+# RWX(ReadWriteMany) 전제: storageClassName(local-path-shared)이 다중 노드/파드 동시 마운트를
+# 지원해야 code-server workspace와 산출물을 공유할 수 있다.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: docux-export
+  labels:
+    app: docux-api
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: {{ .Values.export.storageClassName | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.export.size | quote }}
+  volumeMode: Filesystem
+{{- end }}

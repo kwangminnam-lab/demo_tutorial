@@ -1,0 +1,27 @@
+{{- if .Values.httpRoute.enabled }}
+# Gateway API HTTPRoute — API를 외부 hostname으로 노출.
+# 기본 비활성: 프론트 nginx가 /v1을 내부 프록시하므로 보통 불요.
+# API 직접 호출(외부 클라/디버그)이 필요할 때만 enabled: true.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: docux
+  labels:
+    app: docux
+spec:
+  {{- with .Values.httpRoute.parentRefs }}
+  parentRefs:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  hostnames:
+    {{- if .Values.httpRoute.hostname }}
+    - {{ .Values.httpRoute.hostname | quote }}
+    {{- end }}
+    {{- range .Values.httpRoute.hostnames }}
+    - {{ . | quote }}
+    {{- end }}
+  rules:
+    - backendRefs:
+        - name: docux
+          port: 8000
+{{- end }}

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: docux-api
+description: DocuX 백엔드 API — FastAPI. 외부 PG·Neo4j·LLM 게이트웨이에 연결(사내 K8s 토폴로지). 임베딩 in-process.
+type: application
+version: 0.1.28
+appVersion: "2.18"

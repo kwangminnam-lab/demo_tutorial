@@ -1,0 +1,139 @@
+{{- $img := printf "%s:%s" .Values.image.repository (.Values.image.tag | toString) }}
+{{- if .Values.migrate.enabled }}
+# DB 마이그레이션 Job(alembic upgrade head) — API 기동 전 pre-install/pre-upgrade hook.
+# Settings()는 database_url + neo4j_* 4개를 요구하므로 최소 env만 직접 주입한다.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: docux-migrate
+  labels:
+    app: docux-api
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: docux-api
+    spec:
+      restartPolicy: OnFailure
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: migrate
+          image: {{ $img | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["alembic", "upgrade", "head"]
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: {{ .Values.secret.existingSecret }}, key: DATABASE_URL } }
+            - name: NEO4J_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ .Values.secret.existingSecret }}, key: NEO4J_PASSWORD } }
+            - name: NEO4J_URI
+              value: {{ .Values.config.NEO4J_URI | quote }}
+            - name: NEO4J_USER
+              value: {{ .Values.config.NEO4J_USER | quote }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: docux-api
+  labels:
+    app: docux-api
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      app: docux-api
+  template:
+    metadata:
+      labels:
+        app: docux-api
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: api
+          image: {{ $img | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8000
+          # 비민감(ConfigMap) + 민감(Secret) env를 한꺼번에 주입.
+          envFrom:
+            - secretRef:    { name: {{ .Values.secret.existingSecret }} }
+            - configMapRef: { name: docux-config }
+          {{- if .Values.export.enabled }}
+          # 공유 PVC 마운트 시 산출물 루트를 마운트 경로로 배선(code-server workspace 공유).
+          env:
+            - name: DOCUX_EXPORT_ROOT
+              value: {{ .Values.export.mountPath | quote }}
+          {{- end }}
+          # /healthz는 모든 백엔드(PG·Neo4j·임베더·LLM)를 ping해 무겁다 → 기본 timeout(1s)
+          # 초과로 probe 실패하기 쉽다. values.probes로 넉넉히 조정 가능.
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8000 }
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8000 }
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          resources:
+            requests:
+              {{- toYaml .Values.resources.requests | nindent 14 }}
+            limits:
+              {{- toYaml .Values.resources.limits | nindent 14 }}
+              {{- if .Values.gpu.enabled }}
+              # GPU 임베딩 — 노드의 nvidia.com/gpu 1장 점유(EMBEDDING_DEVICE=cuda + CUDA torch 빌드 필요).
+              nvidia.com/gpu: {{ .Values.gpu.count | quote }}
+              {{- end }}
+          {{- if .Values.export.enabled }}
+          # 산출물 공유 PVC 마운트 — DOCUX_EXPORT_ROOT(env)가 이 경로를 가리킨다.
+          volumeMounts:
+            - name: docux-export
+              mountPath: {{ .Values.export.mountPath | quote }}
+          {{- end }}
+      {{- if .Values.export.enabled }}
+      volumes:
+        - name: docux-export
+          persistentVolumeClaim:
+            # existingClaim 우선(보통 code-server가 소유). 비고 create=true면 차트 생성 PVC명.
+            claimName: {{ .Values.export.existingClaim | default "docux-export" }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: docux-api
+  labels:
+    app: docux-api
+spec:
+  selector:
+    app: docux-api
+  ports:
+    - port: 8000
+      targetPort: 8000

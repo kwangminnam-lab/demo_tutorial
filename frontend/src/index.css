@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+/*
+ * DocuX 브랜드 테마 — design/ 목업(통일된 dx-sidebar) 기준.
+ * 회색 사이드바(#f8f9fa) + 파랑 강조(#1d4ed8/#2563eb) + 흰 캔버스.
+ * 본문 글꼴은 Inter + 한글 폴백(시스템). design 목업의 Inter를 전역 기본으로 둔다.
+ */
+@theme {
+  --font-sans:
+    "Inter", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+    "Malgun Gothic", "Segoe UI", sans-serif;
+
+  --color-brand: #1d4ed8;
+  --color-brand-strong: #1e40af;
+  --color-brand-soft: #eef2ff;
+  --color-sidebar: #f8f9fa;
+  --color-line: #e5e7eb;
+  --color-canvas: #ffffff;
+  --color-ink: #111827;
+  --color-muted: #6b7280;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background: var(--color-canvas);
+  -webkit-font-smoothing: antialiased;
+}

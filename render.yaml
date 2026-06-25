@@ -1,0 +1,72 @@
+# Render Blueprint — DocuX 백엔드 API 무료 호스팅 (ADR-019).
+#
+# 백엔드만 Render에 배포한다(프론트=GitHub Pages, DB=Supabase Postgres+pgvector,
+# Graph=Neo4j Aura, LLM=Groq, 임베딩=HuggingFace API). Render는 Docker 런타임으로
+# 루트 Dockerfile(FastAPI)을 빌드한다.
+#
+# 사용:
+#   1) 이 리포를 Render에 연결 → "New +" → Blueprint → render.yaml 자동 감지.
+#   2) sync:false 환경변수(시크릿)는 Render 대시보드에서 값 입력(코드/git 미포함).
+#   3) 배포 후 URL(https://docux-api.onrender.com)을 프론트 VITE_API_BASE_URL에 등록.
+#
+# 주의(무료 플랜):
+#  - 512MB RAM·비활성 시 슬립(첫 요청 콜드스타트 ~30s). hf_api/openai_compat 백엔드면
+#    로컬 torch·LLM 미적재라 런타임 메모리가 가볍다(이미지에 LibreOffice는 포함 —
+#    문서비교 프리뷰용, 동시 변환 많으면 OOM 위험).
+#  - 영속 디스크 없음(무료): data/ 는 휘발 → diff 해소기는 빈 상태로 graceful.
+#    재적재는 Supabase(pgvector/tsvector)에 영속되므로 검색·RAG는 정상.
+#  - DB 마이그레이션: 최초 1회 Render Shell 또는 로컬에서 `alembic upgrade head`.
+
+services:
+  - type: web
+    name: docux-api
+    runtime: docker
+    plan: free
+    region: singapore            # 한국 근접(무료 가용 리전 중)
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # CMD의 --port 8000 고정을 덮어 $PORT(Render 주입)로 바인딩하게 한다.
+    # --data-root 생략: 무료엔 영속 디스크가 없어 data/ 가 비므로 diff는 graceful.
+    dockerCommand: python scripts/serve_api.py --host 0.0.0.0
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      # --- 무료 스택 백엔드 토글 (ADR-019) ---
+      - key: EMBEDDER_BACKEND
+        value: hf_api
+      - key: VECTOR_BACKEND
+        value: postgres
+      - key: SEARCH_BACKEND
+        value: postgres
+      - key: GRAPH_BACKEND
+        value: neo4j
+      - key: LLM_BACKEND
+        value: openai_compat
+      # 리랭킹: HF Inference에 표준 cross-encoder 태스크 없음 → 무료 배포는 비활성
+      # (임베딩 k-NN + tsvector BM25 + RRF로 충분, ADR-019).
+      - key: RERANKER_ENABLED
+        value: "false"
+
+      # --- LLM (Groq, OpenAI 호환 무료 티어) ---
+      - key: LLM_BASE_URL
+        value: https://api.groq.com/openai/v1
+      - key: LLM_MODEL_NAME
+        value: gemma2-9b-it
+
+      # --- 시크릿 (Render 대시보드에서 입력, git 미포함) ---
+      - key: DATABASE_URL          # postgresql+psycopg://...@db.<ref>.supabase.co:5432/postgres
+        sync: false
+      - key: NEO4J_URI             # neo4j+s://<id>.databases.neo4j.io
+        sync: false
+      - key: NEO4J_USER
+        sync: false
+      - key: NEO4J_PASSWORD
+        sync: false
+      - key: LLM_API_KEY           # Groq API 키
+        sync: false
+      - key: GEMINI_API_KEY        # Gemini 무료 티어 서버측 키
+        sync: false
+      - key: HF_API_KEY            # HuggingFace Inference API 키 (임베딩)
+        sync: false
+      - key: JWT_SECRET            # 세션 토큰 서명 (32B+ 권장)
+        sync: false

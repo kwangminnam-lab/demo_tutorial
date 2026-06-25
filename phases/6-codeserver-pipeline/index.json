@@ -1,0 +1,80 @@
+{
+  "project": "통합 지식 관리 시스템 (KMS) / DocuX",
+  "phase": "6-codeserver-pipeline",
+  "steps": [
+    {
+      "step": 0,
+      "name": "config-data-root",
+      "status": "completed",
+      "started_at": "2026-06-22T13:20:07+0900",
+      "summary": "Settings에 data_root/export_root 추가(env DOCUX_DATA_ROOT/DOCUX_EXPORT_ROOT, 기본 data·data/export). ingest.py·files.py 하드코딩 Path(\"data\") 제거→settings.data_root. 동작 불변.",
+      "completed_at": "2026-06-22T13:24:00+0900"
+    },
+    {
+      "step": 1,
+      "name": "remove-auth-backend",
+      "status": "completed",
+      "started_at": "2026-06-22T13:24:00+0900",
+      "summary": "deps.get_current_user가 토큰검증 없이 고정 마스터 UserContext(AccessLevel.마스터, user_id=demo, dept='') 반환 — 헤더 없어도 200. require_master/require_ingest_admin는 그 마스터로 게이트 통과(시그니처·내부배선 유지). /auth/login 라우트(auth.py) 제거 + app 등록 해제. access 하드필터·부서가중 내부 로직 보존(컨텍스트만 무력화, 복원 가능). ADR-026 추가. test_auth 재작성 + auth 의존 integration API 테스트(search/ingest/rag/parse/extract/members) 새 데모 동작으로 갱신. ruff·pytest(-m not integration, 351 passed) 통과. mypy는 48개 사전존재 에러(parse.py·테스트, auth 무관) 그대로 — 본 변경분 신규 에러 0.",
+      "completed_at": "2026-06-22T13:34:40+0900"
+    },
+    {
+      "step": 2,
+      "name": "remove-auth-frontend",
+      "status": "completed",
+      "started_at": "2026-06-22T13:34:41+0900",
+      "summary": "App.tsx에서 LoginGate/AuthProvider 제거, 앱 바로 메인 진입. client.ts 토큰 게터 항상 null(Authorization 생략, createClient 시그니처 유지). auth/LoginGate.tsx·AuthContext.tsx 삭제. AppLayout 로그아웃 버튼·email prop·useAuth 제거(me.user_id 표시). App.test 재작성(로그인 없이 네비 렌더). tsc -b + vitest(65 passed) 통과.",
+      "completed_at": "2026-06-22T13:36:49+0900"
+    },
+    {
+      "step": 3,
+      "name": "doc-structure",
+      "status": "completed",
+      "started_at": "2026-06-22T13:36:49+0900",
+      "summary": "adapters/ingestion/structure.py 신설: Section(level,title,text,page,path) + build_sections(markdown,page_map)->list[Section] + markdown_to_text(markdown)->str. heading 계층 추출·평문화. test_structure.py 추가. 순수함수.",
+      "completed_at": "2026-06-22T13:40:10+0900"
+    },
+    {
+      "step": 4,
+      "name": "jsonl-output",
+      "status": "completed",
+      "started_at": "2026-06-22T13:40:10+0900",
+      "summary": "adapters/ingestion/jsonl.py: to_parse_jsonl(섹션당 1줄: filename,doc_type,section_index,level,title,path,page,text)·to_extract_jsonl(필드당 1줄: doc_id,schema_id,key,value,page,bbox,confidence,needs_review). parse에 POST /v1/parse/jsonl, extract에 POST /v1/extract/run.jsonl 다운로드 라우트 추가(application/x-ndjson, RFC5987 filename*, 기존 json 응답 무변). api/v1/_download.jsonl_response 공유 헬퍼. test_jsonl.py 추가(7). ruff·mypy(신규 에러 0, 48 baseline)·pytest(369 passed) 통과.",
+      "completed_at": "2026-06-22T13:45:20+0900"
+    },
+    {
+      "step": 5,
+      "name": "export-artifacts",
+      "status": "completed",
+      "started_at": "2026-06-22T13:45:20+0900",
+      "summary": "adapters/storage/export.py: write_export(rel_dir,filename,content,export_root)->Path(원자적쓰기·traversal방어). parse는 export_root/parse/<name>.jsonl, extract는 export_root/extract/<doc_id>.jsonl로 영속. export 실패는 warning+응답 플래그(핵심응답 graceful). test_export.py 추가.",
+      "completed_at": "2026-06-22T13:49:25+0900"
+    },
+    {
+      "step": 6,
+      "name": "drag-drop-ui",
+      "status": "completed",
+      "started_at": "2026-06-22T13:49:25+0900",
+      "summary": "components/Dropzone.tsx 신설(onFiles,accept,multiple,label,disabled,ariaLabel,className — drag-drop+클릭, accept 드롭검증 안 함→호출측 기존 검증 흐름). ParsePage DropField→Dropzone 교체, ExtractionPage 2개 plain input→Dropzone, UploadModal plain input→Dropzone. Dropzone 단위테스트(drop→onFiles, 클릭→input, 빈drop/disabled 무시)+ExtractionPage·UploadModal drag-drop 테스트. tsc -b+vitest(72 passed) 통과.",
+      "completed_at": "2026-06-22T13:54:34+0900"
+    },
+    {
+      "step": 7,
+      "name": "jsonl-ui",
+      "status": "completed",
+      "started_at": "2026-06-22T13:54:34+0900",
+      "summary": "client.ts parseJsonl(file)→NDJSON 텍스트(POST /v1/parse/jsonl). lib/jsonl.ts: parseJsonlSections(구조)·extractResultToJsonl(필드당 1줄, 재실행 없이 결과 직렬화). ParsePage .jsonl 다운로드 버튼+heading 구조 트리뷰(level 들여쓰기)+로드/다운로드 에러 표시. ExtractionPanel JSONL 저장 버튼. vitest 다운로드·구조뷰·serializer 테스트. tsc -b+vitest(82 passed) 통과.",
+      "completed_at": "2026-06-22T14:02:26+0900"
+    },
+    {
+      "step": 8,
+      "name": "helm-pvc",
+      "status": "completed",
+      "started_at": "2026-06-22T14:02:26+0900",
+      "summary": "helm/docux-api: values.export(enabled/existingClaim/create/storageClassName/size/mountPath). deployment.yaml export.enabled시 volume+volumeMount+DOCUX_EXPORT_ROOT 주입. pvc-export.yaml(create시 RWX). Chart.yaml bump. helm lint/template 검증. 기본 off=무회귀.",
+      "completed_at": "2026-06-22T14:04:05+0900"
+    }
+  ],
+  "created_at": "2026-06-22T13:20:07+0900",
+  "completed_at": "2026-06-22T14:04:05+0900"
+}

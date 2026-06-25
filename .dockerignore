@@ -1,0 +1,23 @@
+# 통합/백엔드 이미지 빌드 컨텍스트 제외 — 설치·빌드 산출물은 이미지 안에서 생성.
+# (통합 Dockerfile.demo 는 컨텍스트가 da_h/ 라 frontend/.dockerignore 가 적용되지 않으므로
+#  여기서 프론트 node_modules·dist 를 반드시 제외해야 한다 — pnpm 심링크 복사 충돌 방지.)
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/coverage/
+
+# 파이썬·가상환경·캐시.
+.venv/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# VCS·로컬 잡파일.
+.git/
+.DS_Store
+*.log
+.idea/
+.vscode/

@@ -1,0 +1,11 @@
+docux 배포 완료 (namespace: {{ .Release.Namespace }}).
+
+내부 엔드포인트:
+  http://docux.{{ .Release.Namespace }}.svc.cluster.local:8000
+
+확인:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/docux 8000:8000
+  curl localhost:8000/healthz
+
+선행: 시크릿 docux-secret 이 같은 namespace에 있어야 함
+  (DATABASE_URL, NEO4J_PASSWORD, JWT_SECRET, GEMINI_API_KEY).

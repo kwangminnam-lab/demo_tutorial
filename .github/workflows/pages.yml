@@ -1,0 +1,61 @@
+# 프론트엔드(Vite 정적 빌드)를 GitHub Pages에 배포 (ADR-019, 무료 호스팅).
+# 백엔드는 별도 호스트 → 빌드 시 VITE_API_BASE_URL로 그 origin을, VITE_BASE로
+# Pages 서브경로를 주입한다. 두 값은 리포 Settings → Variables에 등록:
+#   VITE_API_BASE_URL = https://<백엔드-호스트>        (예: Render/Fly 무료)
+#   VITE_BASE         = /<repo>/                       (user/org Pages·커스텀 도메인이면 /)
+name: Deploy frontend to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 동시 배포 1건만(겹치면 이전 취소).
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+        env:
+          VITE_BASE: ${{ vars.VITE_BASE }}
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+      # SPA 라우팅 새로고침 404 우회(404.html=index.html) + Jekyll 비활성.
+      - run: cp dist/index.html dist/404.html && touch dist/.nojekyll
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
